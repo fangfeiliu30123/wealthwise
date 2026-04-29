@@ -96,12 +96,10 @@ const FinancialSnapshot = ({ profile: profileProp, onContinue, onEdit }: Financi
     let cancelled = false;
     (async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) {
-          if (!cancelled) setLoading(false);
-          return;
-        }
-        const { data, error } = await supabase.functions.invoke("plaid-get-accounts");
+        const { getDeviceId } = await import("@/lib/device-id");
+        const { data, error } = await supabase.functions.invoke("plaid-get-accounts", {
+          body: { device_id: getDeviceId() },
+        });
         if (cancelled) return;
         if (!error && data?.summary) setPlaidData(data.summary);
       } catch {

@@ -8,3 +8,12 @@ verify_jwt = false
 
 [functions.parse-w2]
 verify_jwt = false
+
+[functions.plaid-create-link-token]
+verify_jwt = false
+
+[functions.plaid-exchange-token]
+verify_jwt = false
+
+[functions.plaid-get-accounts]
+verify_jwt = false

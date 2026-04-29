@@ -55,17 +55,19 @@ const NetWorthStep = ({ value, onChange }: NetWorthStepProps) => {
   // Pull Plaid totals when connected and merge into manual fields (without overwriting non-empty user entries).
   const refreshFromPlaid = async () => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
-      const { data, error } = await supabase.functions.invoke("plaid-get-accounts");
-      if (error || !data) return;
+      const { getDeviceId } = await import("@/lib/device-id");
+      const { data, error } = await supabase.functions.invoke("plaid-get-accounts", {
+        body: { device_id: getDeviceId() },
+      });
+      if (error || !data?.summary) return;
+      const summary = data.summary;
       setPlaidLinked(true);
-      const plaidLiquid = Number(data?.totalBalance || 0);
-      const plaidInvest = Number(data?.totalInvestments || 0);
-      const plaidDebt = Number(data?.totalDebt || 0);
+      const plaidLiquid = Number(summary?.totalBalance || 0);
+      const plaidInvest = Number(summary?.totalInvestments || 0);
+      const plaidDebt = Number(summary?.totalDebt || 0);
 
       // Heuristic: split Plaid debt across student / mortgage / credit if subtypes available
-      const debts = (data?.debtAccounts || []) as { subtype?: string | null; balance?: number }[];
+      const debts = (summary?.debtAccounts || []) as { subtype?: string | null; balance?: number }[];
       const sumBy = (match: (s: string) => boolean) =>
         debts.filter(d => match((d.subtype || "").toLowerCase())).reduce((a, b) => a + (b.balance || 0), 0);
       const mortgage = sumBy(s => s.includes("mortgage"));

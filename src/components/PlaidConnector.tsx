@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { usePlaidLink } from "react-plaid-link";
 import { supabase } from "@/integrations/supabase/client";
+import { getDeviceId } from "@/lib/device-id";
 import { Landmark, CheckCircle2, Loader2, AlertCircle, Plus } from "lucide-react";
 
 interface ConnectedAccount {
@@ -27,21 +28,16 @@ const PlaidConnector = ({ onAccountsUpdated }: PlaidConnectorProps) => {
   const [connectedAccounts, setConnectedAccounts] = useState<ConnectedAccount[]>([]);
   const [fetchingAccounts, setFetchingAccounts] = useState(true);
 
-  // Fetch existing connected accounts
+  // Fetch existing connected accounts (via edge function — uses device_id, no auth required)
   const fetchAccounts = useCallback(async () => {
     try {
-      const { data, error } = await supabase
-        .from("connected_accounts")
-        .select(`
-          id, institution_name, status,
-          account_balances (name, type, current_balance, currency)
-        `)
-        .eq("status", "active");
-
+      const { data, error } = await supabase.functions.invoke("plaid-get-accounts", {
+        body: { device_id: getDeviceId() },
+      });
       if (error) throw error;
-      setConnectedAccounts((data as any) || []);
+      setConnectedAccounts((data?.accounts as any) || []);
     } catch {
-      // User might not be logged in yet
+      // ignore
     } finally {
       setFetchingAccounts(false);
     }
@@ -55,7 +51,9 @@ const PlaidConnector = ({ onAccountsUpdated }: PlaidConnectorProps) => {
     setLoading(true);
     setError(null);
     try {
-      const { data, error } = await supabase.functions.invoke("plaid-create-link-token");
+      const { data, error } = await supabase.functions.invoke("plaid-create-link-token", {
+        body: { device_id: getDeviceId() },
+      });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
       setLinkToken(data.link_token);
@@ -71,7 +69,7 @@ const PlaidConnector = ({ onAccountsUpdated }: PlaidConnectorProps) => {
     setError(null);
     try {
       const { data, error } = await supabase.functions.invoke("plaid-exchange-token", {
-        body: { public_token: publicToken },
+        body: { public_token: publicToken, device_id: getDeviceId() },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);

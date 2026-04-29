@@ -127,9 +127,11 @@ const AdviceDashboard = ({ profile, onReset }: AdviceDashboardProps) => {
   }, []);
 
   const fetchAccountData = useCallback(async () => {
-    if (!isAuthenticated) return;
     try {
-      const { data, error } = await supabase.functions.invoke("plaid-get-accounts");
+      const { getDeviceId } = await import("@/lib/device-id");
+      const { data, error } = await supabase.functions.invoke("plaid-get-accounts", {
+        body: { device_id: getDeviceId() },
+      });
       if (error) throw error;
       if (data?.summary) {
         setAccountData(data.summary);
@@ -137,7 +139,7 @@ const AdviceDashboard = ({ profile, onReset }: AdviceDashboardProps) => {
     } catch (e) {
       console.error("Failed to fetch account data for advice:", e);
     }
-  }, [isAuthenticated]);
+  }, []);
 
   useEffect(() => {
     fetchAccountData();

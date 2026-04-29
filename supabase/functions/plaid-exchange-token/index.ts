@@ -10,72 +10,30 @@ const PLAID_BASE_URL = "https://sandbox.plaid.com"
 const normalizeSecret = (value?: string | null) => {
   const trimmed = value?.trim() ?? ''
   if (!trimmed) return ''
-
-  const lastNonEmptyLine = trimmed
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .at(-1) ?? ''
-
+  const lastNonEmptyLine = trimmed.split(/\r?\n/).map((l) => l.trim()).filter(Boolean).at(-1) ?? ''
   const withoutOuterQuotes = lastNonEmptyLine.replace(/^['"]|['"]$/g, '')
   const assignmentMatch = withoutOuterQuotes.match(/^(?:export\s+)?[A-Z0-9_]+=([\s\S]+)$/)
   return (assignmentMatch?.[1] ?? withoutOuterQuotes).trim().replace(/^['"]|['"]$/g, '')
 }
 
 const getPlaidCredentials = () => {
-  const rawClientId = Deno.env.get('PLAID_CLIENT_ID')
-  const rawSecret = Deno.env.get('PLAID_SECRET')
-  const clientId = normalizeSecret(rawClientId)
-  const secret = normalizeSecret(rawSecret)
-
-  const clientIdHasWhitespace = /\s/.test(clientId)
-  const secretHasWhitespace = /\s/.test(secret)
-  const clientIdLooksLikeAssignment = /^(?:export\s+)?[A-Z0-9_]+=/.test(rawClientId?.trim() ?? '')
-  const secretLooksLikeAssignment = /^(?:export\s+)?[A-Z0-9_]+=/.test(rawSecret?.trim() ?? '')
-
-  if (!clientId || !secret || clientIdHasWhitespace || secretHasWhitespace) {
-    console.error('Plaid credentials misconfigured', {
-      hasClientId: Boolean(clientId),
-      hasSecret: Boolean(secret),
-      clientIdLength: clientId.length,
-      secretLength: secret.length,
-      clientIdHasWhitespace,
-      secretHasWhitespace,
-      clientIdLooksLikeAssignment,
-      secretLooksLikeAssignment,
-    })
-    return null
-  }
-
+  const clientId = normalizeSecret(Deno.env.get('PLAID_CLIENT_ID'))
+  const secret = normalizeSecret(Deno.env.get('PLAID_SECRET'))
+  if (!clientId || !secret || /\s/.test(clientId) || /\s/.test(secret)) return null
   return { clientId, secret }
 }
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
-  }
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
   try {
-    const authHeader = req.headers.get('Authorization')
-    if (!authHeader?.startsWith('Bearer ')) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
-    }
-
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_ANON_KEY')!,
-      { global: { headers: { Authorization: authHeader } } }
-    )
-
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
-    if (userError || !user) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
-    }
-
-    const userId = user.id
-
-    const body = await req.json()
+    const body = await req.json().catch(() => ({}))
     const publicToken = body?.public_token
+    const deviceId = typeof body?.device_id === 'string' && body.device_id.length >= 8 ? body.device_id : null
+
+    if (!deviceId) {
+      return new Response(JSON.stringify({ error: 'device_id is required' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
     if (!publicToken || typeof publicToken !== 'string') {
       return new Response(JSON.stringify({ error: 'public_token is required' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
@@ -125,7 +83,8 @@ Deno.serve(async (req) => {
     const { data: connAccount, error: insertError } = await serviceClient
       .from('connected_accounts')
       .insert({
-        user_id: userId,
+        device_id: deviceId,
+        user_id: null,
         plaid_item_id: item_id,
         plaid_access_token: access_token,
         institution_name: institutionName,
@@ -174,10 +133,7 @@ Deno.serve(async (req) => {
 
             if (holdingsData.holdings) {
               const securities = (holdingsData.securities || []) as Array<{
-                security_id: string
-                name?: string | null
-                ticker_symbol?: string | null
-                type?: string | null
+                security_id: string; name?: string | null; ticker_symbol?: string | null; type?: string | null
               }>
               const secMap = new Map(securities.map((s) => [s.security_id, s]))
 
@@ -242,9 +198,7 @@ Deno.serve(async (req) => {
       success: true,
       institution: institutionName,
       account_id: connAccount.id,
-    }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
+    }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
   } catch (error) {
     console.error('Error:', error)
     return new Response(JSON.stringify({ error: 'Internal server error' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })

@@ -155,6 +155,7 @@ export type Database = {
       connected_accounts: {
         Row: {
           created_at: string
+          device_id: string | null
           id: string
           institution_id: string | null
           institution_name: string | null
@@ -162,10 +163,11 @@ export type Database = {
           plaid_item_id: string
           status: string
           updated_at: string
-          user_id: string
+          user_id: string | null
         }
         Insert: {
           created_at?: string
+          device_id?: string | null
           id?: string
           institution_id?: string | null
           institution_name?: string | null
@@ -173,10 +175,11 @@ export type Database = {
           plaid_item_id: string
           status?: string
           updated_at?: string
-          user_id: string
+          user_id?: string | null
         }
         Update: {
           created_at?: string
+          device_id?: string | null
           id?: string
           institution_id?: string | null
           institution_name?: string | null
@@ -184,7 +187,7 @@ export type Database = {
           plaid_item_id?: string
           status?: string
           updated_at?: string
-          user_id?: string
+          user_id?: string | null
         }
         Relationships: []
       }
