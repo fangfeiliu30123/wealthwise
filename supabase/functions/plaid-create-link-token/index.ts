@@ -21,6 +21,12 @@ const getPlaidCredentials = () => {
   return { clientId, secret }
 }
 
+const jsonResponse = (body: Record<string, unknown>, status = 200) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  })
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
@@ -28,12 +34,12 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}))
     const deviceId = typeof body?.device_id === 'string' && body.device_id.length >= 8 ? body.device_id : null
     if (!deviceId) {
-      return new Response(JSON.stringify({ error: 'device_id is required' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      return jsonResponse({ error: 'device_id is required' }, 400)
     }
 
     const credentials = getPlaidCredentials()
     if (!credentials) {
-      return new Response(JSON.stringify({ error: 'Plaid credentials are misconfigured' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      return jsonResponse({ error: 'Plaid credentials are misconfigured' }, 500)
     }
 
     const response = await fetch(`${PLAID_BASE_URL}/link/token/create`, {
@@ -53,14 +59,20 @@ Deno.serve(async (req) => {
     const data = await response.json()
     if (!response.ok) {
       console.error('Plaid error:', data)
-      return new Response(JSON.stringify({ error: data.error_message || 'Failed to create link token' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      return jsonResponse({
+        error: data.error_message || data.error_code || 'Failed to create link token',
+        details: {
+          plaid_error_type: data.error_type,
+          plaid_error_code: data.error_code,
+          plaid_display_message: data.display_message,
+          plaid_request_id: data.request_id,
+        },
+      }, 400)
     }
 
-    return new Response(JSON.stringify({ link_token: data.link_token }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
+    return jsonResponse({ link_token: data.link_token })
   } catch (error) {
     console.error('Error:', error)
-    return new Response(JSON.stringify({ error: 'Internal server error' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    return jsonResponse({ error: error instanceof Error ? error.message : 'Internal server error' }, 500)
   }
 })

@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { usePlaidLink } from "react-plaid-link";
 import { getDeviceId } from "@/lib/device-id";
+import { invokePlaidFunction } from "@/lib/plaid-functions";
 import { Landmark, CheckCircle2, Loader2, AlertCircle, Plus } from "lucide-react";
 
 interface ConnectedAccount {
@@ -18,28 +19,6 @@ interface ConnectedAccount {
 interface PlaidConnectorProps {
   onAccountsUpdated?: () => void;
 }
-
-const invokePlaidFunction = async (functionName: string, payload: Record<string, unknown>) => {
-  const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY;
-  if (!publishableKey || !import.meta.env.VITE_SUPABASE_URL) {
-    throw new Error("Account linking is not configured for this build");
-  }
-
-  const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${functionName}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      apikey: publishableKey,
-      Authorization: `Bearer ${publishableKey}`,
-    },
-    body: JSON.stringify(payload),
-  });
-  const result = await response.json().catch(() => ({}));
-  if (!response.ok || result?.error) {
-    throw new Error(result?.error || `Unable to connect accounts (${response.status})`);
-  }
-  return result;
-};
 
 const PlaidConnector = ({ onAccountsUpdated }: PlaidConnectorProps) => {
   const [linkToken, setLinkToken] = useState<string | null>(null);

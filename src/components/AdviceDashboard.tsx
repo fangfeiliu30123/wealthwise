@@ -15,6 +15,7 @@ import FinancialTimeline, { Milestone } from "./FinancialTimeline";
 import IncomeAllocationChart from "./IncomeAllocationChart";
 import { computeFunnelSummary } from "@/lib/funnel-summary";
 import { supabase } from "@/integrations/supabase/client";
+import { invokePlaidFunction } from "@/lib/plaid-functions";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 function deriveIncome(p: UserProfile): number {
@@ -129,10 +130,9 @@ const AdviceDashboard = ({ profile, onReset }: AdviceDashboardProps) => {
   const fetchAccountData = useCallback(async () => {
     try {
       const { getDeviceId } = await import("@/lib/device-id");
-      const { data, error } = await supabase.functions.invoke("plaid-get-accounts", {
-        body: { device_id: getDeviceId() },
+      const data = await invokePlaidFunction<{ summary?: ConnectedAccountData }>("plaid-get-accounts", {
+        device_id: getDeviceId(),
       });
-      if (error) throw error;
       if (data?.summary) {
         setAccountData(data.summary);
       }

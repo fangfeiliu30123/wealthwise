@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { getDeviceId } from "@/lib/device-id";
+import { invokePlaidFunction } from "@/lib/plaid-functions";
 import { TrendingUp, Wallet, PiggyBank, CreditCard, BarChart3, Loader2, ChevronDown } from "lucide-react";
 
 interface AccountSummary {
@@ -42,10 +42,9 @@ const ConnectedAccountsSummary = ({ refreshKey }: ConnectedAccountsSummaryProps)
   const fetchSummary = useCallback(async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke("plaid-get-accounts", {
-        body: { device_id: getDeviceId() },
+      const data = await invokePlaidFunction<{ summary?: AccountSummary }>("plaid-get-accounts", {
+        device_id: getDeviceId(),
       });
-      if (error) throw error;
       if (data?.summary) {
         setSummary(data.summary);
       }

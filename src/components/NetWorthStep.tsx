@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Wallet, PiggyBank, TrendingUp, Home, Briefcase, GraduationCap, Car, CreditCard, Building2, Sparkles, Landmark } from "lucide-react";
 import { ManualNetWorth } from "@/lib/types";
 import PlaidConnector from "./PlaidConnector";
-import { supabase } from "@/integrations/supabase/client";
+import { invokePlaidFunction } from "@/lib/plaid-functions";
 
 interface NetWorthStepProps {
   value: ManualNetWorth;
@@ -56,10 +56,8 @@ const NetWorthStep = ({ value, onChange }: NetWorthStepProps) => {
   const refreshFromPlaid = async () => {
     try {
       const { getDeviceId } = await import("@/lib/device-id");
-      const { data, error } = await supabase.functions.invoke("plaid-get-accounts", {
-        body: { device_id: getDeviceId() },
-      });
-      if (error || !data?.summary) return;
+      const data = await invokePlaidFunction<{ summary?: any }>("plaid-get-accounts", { device_id: getDeviceId() });
+      if (!data?.summary) return;
       const summary = data.summary;
       setPlaidLinked(true);
       const plaidLiquid = Number(summary?.totalBalance || 0);

@@ -3,8 +3,8 @@ import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { ArrowLeft, AlertCircle, CheckCircle2, Wallet, TrendingUp, CreditCard, Info } from "lucide-react";
 import { ConnectedAccountData, UserProfile } from "@/lib/types";
-import { supabase } from "@/integrations/supabase/client";
 import { buildSnapshot, MergedFinancialSnapshot } from "@/lib/merge-financial-data";
+import { invokePlaidFunction } from "@/lib/plaid-functions";
 
 const PROFILE_KEY = "wealthwise_profile";
 
@@ -97,11 +97,11 @@ const FinancialSnapshot = ({ profile: profileProp, onContinue, onEdit }: Financi
     (async () => {
       try {
         const { getDeviceId } = await import("@/lib/device-id");
-        const { data, error } = await supabase.functions.invoke("plaid-get-accounts", {
-          body: { device_id: getDeviceId() },
+        const data = await invokePlaidFunction<{ summary?: ConnectedAccountData }>("plaid-get-accounts", {
+          device_id: getDeviceId(),
         });
         if (cancelled) return;
-        if (!error && data?.summary) setPlaidData(data.summary);
+        if (data?.summary) setPlaidData(data.summary);
       } catch {
         // ignore
       } finally {
