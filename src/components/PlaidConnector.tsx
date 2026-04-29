@@ -1,6 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
 import { usePlaidLink } from "react-plaid-link";
-import { supabase } from "@/integrations/supabase/client";
 import { getDeviceId } from "@/lib/device-id";
 import { Landmark, CheckCircle2, Loader2, AlertCircle, Plus } from "lucide-react";
 
@@ -20,6 +19,28 @@ interface PlaidConnectorProps {
   onAccountsUpdated?: () => void;
 }
 
+const invokePlaidFunction = async (functionName: string, payload: Record<string, unknown>) => {
+  const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY;
+  if (!publishableKey || !import.meta.env.VITE_SUPABASE_URL) {
+    throw new Error("Account linking is not configured for this build");
+  }
+
+  const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${functionName}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: publishableKey,
+      Authorization: `Bearer ${publishableKey}`,
+    },
+    body: JSON.stringify(payload),
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok || result?.error) {
+    throw new Error(result?.error || `Unable to connect accounts (${response.status})`);
+  }
+  return result;
+};
+
 const PlaidConnector = ({ onAccountsUpdated }: PlaidConnectorProps) => {
   const [linkToken, setLinkToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -28,31 +49,10 @@ const PlaidConnector = ({ onAccountsUpdated }: PlaidConnectorProps) => {
   const [connectedAccounts, setConnectedAccounts] = useState<ConnectedAccount[]>([]);
   const [fetchingAccounts, setFetchingAccounts] = useState(true);
 
-  const invokePlaidFunction = async (functionName: string, payload: Record<string, unknown>) => {
-    const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY;
-    const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${functionName}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        apikey: publishableKey,
-        Authorization: `Bearer ${publishableKey}`,
-      },
-      body: JSON.stringify(payload),
-    });
-    const result = await response.json().catch(() => ({}));
-    if (!response.ok || result?.error) {
-      throw new Error(result?.error || `Unable to connect accounts (${response.status})`);
-    }
-    return result;
-  };
-
   // Fetch existing connected accounts (via edge function — uses device_id, no auth required)
   const fetchAccounts = useCallback(async () => {
     try {
-      const { data, error } = await supabase.functions.invoke("plaid-get-accounts", {
-        body: { device_id: getDeviceId() },
-      });
-      if (error) throw error;
+      const data = await invokePlaidFunction("plaid-get-accounts", { device_id: getDeviceId() });
       setConnectedAccounts((data?.accounts as any) || []);
     } catch {
       // ignore
