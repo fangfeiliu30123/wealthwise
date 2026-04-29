@@ -28,6 +28,24 @@ const PlaidConnector = ({ onAccountsUpdated }: PlaidConnectorProps) => {
   const [connectedAccounts, setConnectedAccounts] = useState<ConnectedAccount[]>([]);
   const [fetchingAccounts, setFetchingAccounts] = useState(true);
 
+  const invokePlaidFunction = async (functionName: string, payload: Record<string, unknown>) => {
+    const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY;
+    const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${functionName}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: publishableKey,
+        Authorization: `Bearer ${publishableKey}`,
+      },
+      body: JSON.stringify(payload),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || result?.error) {
+      throw new Error(result?.error || `Unable to connect accounts (${response.status})`);
+    }
+    return result;
+  };
+
   // Fetch existing connected accounts (via edge function — uses device_id, no auth required)
   const fetchAccounts = useCallback(async () => {
     try {
@@ -51,11 +69,7 @@ const PlaidConnector = ({ onAccountsUpdated }: PlaidConnectorProps) => {
     setLoading(true);
     setError(null);
     try {
-      const { data, error } = await supabase.functions.invoke("plaid-create-link-token", {
-        body: { device_id: getDeviceId() },
-      });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
+      const data = await invokePlaidFunction("plaid-create-link-token", { device_id: getDeviceId() });
       setLinkToken(data.link_token);
     } catch (e: any) {
       setError(e.message || "Failed to initialize account linking");
@@ -68,11 +82,7 @@ const PlaidConnector = ({ onAccountsUpdated }: PlaidConnectorProps) => {
     setExchanging(true);
     setError(null);
     try {
-      const { data, error } = await supabase.functions.invoke("plaid-exchange-token", {
-        body: { public_token: publicToken, device_id: getDeviceId() },
-      });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
+      await invokePlaidFunction("plaid-exchange-token", { public_token: publicToken, device_id: getDeviceId() });
       await fetchAccounts();
       onAccountsUpdated?.();
     } catch (e: any) {
