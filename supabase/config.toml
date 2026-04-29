@@ -1,1 +1,10 @@
 project_id = "nimuqswtprxgoqchrwni"
+
+[functions.generate-financial-plan]
+verify_jwt = false
+
+[functions.extract-actions]
+verify_jwt = false
+
+[functions.parse-w2]
+verify_jwt = false
